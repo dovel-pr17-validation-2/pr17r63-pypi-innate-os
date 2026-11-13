@@ -1,0 +1,27 @@
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+src = ["ros2_ws/src"]
+# Never lint generated/build artifacts (colcon build/install/log trees).
+extend-exclude = ["**/build", "**/install", "**/log"]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "UP",  # pyupgrade
+]
+ignore = [
+    "E501",  # line too long (handled by formatter)
+    "B008",  # do not perform function calls in argument defaults
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["mars_nav", "mars_control", "mars_cam", "mars_arm", "brain_client", "manipulation", "workspace", "innate", "innate_proxy"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"

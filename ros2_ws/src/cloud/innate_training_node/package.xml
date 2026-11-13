@@ -1,0 +1,25 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>innate_training_node</name>
+  <version>0.1.0</version>
+  <description>ROS 2 node for Innate training job management, status publishing, and file transfer.</description>
+  <maintainer email="eng@innate.bot">Innate Engineering</maintainer>
+  <license>Apache-2.0</license>
+
+  <depend>rclpy</depend>
+  <depend>builtin_interfaces</depend>
+  <depend>innate_cloud_msgs</depend>
+  <depend>cloud_clients</depend>
+  <!-- Runtime-only: post-download TensorRT engine pre-build runs `python -m manipulation.act_trt`. -->
+  <exec_depend>manipulation</exec_depend>
+  <!-- Runtime-only: workers.py locates the manipulation lib dir via get_package_prefix. -->
+  <exec_depend>ament_index_python</exec_depend>
+  <!-- Runtime-only: the engine pre-build sweep resolves skill roots via
+       brain_client.common.script_paths.get_skill_directories (single source of truth). -->
+  <exec_depend>brain_client</exec_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>

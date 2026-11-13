@@ -1,0 +1,20 @@
+# CI base image bakes deps + a full prebuilt ros2_ws (incl. vcs-imported
+# externals), config, and workspace at build time. Allow what
+# Dockerfile.test-base COPYs from; without this file BuildKit would fall back to
+# the restrictive root .dockerignore and the build would have no source.
+**
+
+!ros2_ws/
+!ros2_ws/**
+
+# ...but never local colcon outputs. Their CMakeCache.txt embeds absolute host
+# paths, so copying them in breaks the in-container build ("CMakeCache directory
+# is different"). CI checkouts have no build/; local dev does.
+ros2_ws/build/
+ros2_ws/install/
+ros2_ws/log/
+
+!config/
+!config/**
+!workspace/
+!workspace/**

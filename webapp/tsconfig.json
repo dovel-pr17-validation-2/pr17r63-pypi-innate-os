@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    "strict": true,
+    "target": "es2022",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "lib": ["es2022", "dom", "dom.iterable"],
+    "types": [],
+    "forceConsistentCasingInFileNames": true
+  },
+  "include": ["js/**/*"],
+  "//": "micWorklet.js runs in the AudioWorklet global scope (AudioWorkletProcessor, registerProcessor, sampleRate), which lib.dom does not declare.",
+  "exclude": ["js/agent/micWorklet.js"]
+}

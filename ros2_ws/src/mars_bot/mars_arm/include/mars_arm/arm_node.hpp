@@ -1,0 +1,252 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2026 Innate Inc
+#pragma once
+
+#include <rclcpp/rclcpp.hpp>
+#include <sensor_msgs/msg/joint_state.hpp>
+#include <std_msgs/msg/float64_multi_array.hpp>
+#include <std_msgs/msg/int32.hpp>
+#include <std_msgs/msg/string.hpp>
+#include <std_msgs/msg/empty.hpp>
+#include <std_srvs/srv/trigger.hpp>
+#include <std_srvs/srv/set_bool.hpp>
+#include "mars_arm/dynamixel.hpp"
+#include "mars_arm/robot.hpp"
+#include "mars_arm/arm_types.hpp"
+#include "mars_msgs/srv/goto_js.hpp"
+#include "mars_msgs/srv/goto_js_trajectory.hpp"
+#include "mars_msgs/msg/arm_status.hpp"
+#include <atomic>
+#include <cmath>
+#include <chrono>
+#include <nlohmann/json.hpp>
+#include <thread>
+#include <sstream>
+#include <iomanip>
+#include <cstdint>
+#include <set>
+#include <array>
+#include <deque>
+#include <mutex>
+#include <optional>
+
+namespace mars_arm {
+
+class MarsArmNode : public rclcpp::Node {
+   public:
+    MarsArmNode();
+    ~MarsArmNode() = default;
+
+    // ── Configuration (arm_config.cpp) ──────────────────────────────────
+    void loadJointConfigs(const std::vector<std::string>& joint_names);
+    rcl_interfaces::msg::SetParametersResult onParameterChange(const std::vector<rclcpp::Parameter>& parameters);
+
+    // ── Servo init & helpers (arm_services.cpp) ─────────────────────────
+    void initializeServos();
+    template <typename Func>
+    void retryServoOp(int servo_id, const char* op_name, Func&& fn, int max_retries = 3);
+    void configureServoByIdLocked(int servo_id, bool enable_torque = true);
+    // Re-write Goal Current after any torque enable (it is RAM and a
+    // torque-enable clears it). No-op for joints without a goal_current.
+    void reapplyGoalCurrentLocked(int servo_id);
+    void configureServosLocked(bool enable_torque = true);
+    void syncTargetToMotorPositions();
+    void holdRebootedJointsLocked(const std::vector<int>& servo_ids);
+
+    // ── Control loop (arm_control.cpp) ──────────────────────────────────
+    void controlTimerCallback();
+    void recordLoopTiming(std::array<std::chrono::steady_clock::time_point, 9>& ts);
+    std::vector<int> applyLimitsAndConvertToEncoder(std::vector<double>& command_data);
+    double shoulderMinLimit(double yaw) const;
+    double clampToJointRange(size_t joint, double rad) const;
+    std::vector<double> insideLimitsKeepingPitch(std::vector<double> pose) const;
+
+    // ── Service & topic callbacks (arm_services.cpp) ────────────────────
+    void armCommandCallback(const std_msgs::msg::Float64MultiArray::SharedPtr msg);
+    void armTorqueOnCallback(const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
+                             std::shared_ptr<std_srvs::srv::Trigger::Response> response);
+    void armTorqueOffCallback(const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
+                              std::shared_ptr<std_srvs::srv::Trigger::Response> response);
+    void armRebootServosCallback(const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
+                                 std::shared_ptr<std_srvs::srv::Trigger::Response> response);
+    void armFixErrorCallback(const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
+                             std::shared_ptr<std_srvs::srv::Trigger::Response> response);
+    void healthMonitorCallback();
+    void announceTorque();
+    bool reportTrippedServosLocked(mars_msgs::msg::ArmStatus& status);
+    void reportLoadAndTemperatureLocked(mars_msgs::msg::ArmStatus& status);
+    std::string describeHardwareError(uint8_t status, int servo_id) const;
+
+    // ── Head servo (arm_head.cpp) ───────────────────────────────────────
+    int logicalAngleToEncoder(double logical_angle_deg);
+    double encoderToLogicalAngle(int encoder_value);
+    // Recorded, not written: the pass-through sends it with every arm command.
+    void commandHead(double logical_angle_deg);
+    void publishHeadPosition(int encoder_value);
+    void headPositionCallback(const std_msgs::msg::Int32::SharedPtr msg);
+    void headAiPositionCallback(const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
+                                std::shared_ptr<std_srvs::srv::Trigger::Response> response);
+    void headEnableServoCallback(const std::shared_ptr<std_srvs::srv::SetBool::Request> request,
+                                 std::shared_ptr<std_srvs::srv::SetBool::Response> response);
+
+    // ── Trajectory planning & execution (arm_trajectory.cpp) ────────────
+    std::vector<std::vector<double>> computeCubicSplineTrajectory(const std::vector<double>& start,
+                                                                  const std::vector<double>& goal, double duration,
+                                                                  double dt);
+    // False as soon as anything else claims the arm.
+    bool planAndExecuteTrajectory(const std::vector<double>& target_positions, double trajectory_time,
+                                  GainMode trajectory_gain_mode = GainMode::SCHEDULED,
+                                  std::optional<uint64_t> claim = std::nullopt);
+    bool planAndExecuteMultiWaypointTrajectory(const std::vector<std::vector<double>>& waypoints,
+                                               const std::vector<double>& segment_durations);
+    bool commandIfClaimed(uint64_t claim, const std::vector<double>& point);
+    void idleRestCallback();
+    void foldToRest(uint64_t claim, std::vector<double> target);
+    void armGotoJSCallback(const std::shared_ptr<mars_msgs::srv::GotoJS::Request> request,
+                           std::shared_ptr<mars_msgs::srv::GotoJS::Response> response);
+    void armGotoJSV2Callback(const std::shared_ptr<mars_msgs::srv::GotoJS::Request> request,
+                             std::shared_ptr<mars_msgs::srv::GotoJS::Response> response);
+    void armGotoJSTrajectoryCallback(const std::shared_ptr<mars_msgs::srv::GotoJSTrajectory::Request> request,
+                                     std::shared_ptr<mars_msgs::srv::GotoJSTrajectory::Response> response);
+
+    // ── Member variables ────────────────────────────────────────────────
+
+    std::shared_ptr<Dynamixel> dynamixel_;
+    std::unique_ptr<Robot> robot_;
+    std::vector<JointConfig> joint_configs_;
+
+    // ARM publishers / subscribers / services
+    rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr arm_state_pub_;
+    rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr arm_command_state_pub_;
+    rclcpp::Subscription<std_msgs::msg::Float64MultiArray>::SharedPtr arm_command_sub_;
+    rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr arm_torque_on_service_;
+    rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr arm_torque_off_service_;
+    rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr arm_reboot_service_;
+    rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr arm_fix_error_service_;
+    rclcpp::Service<mars_msgs::srv::GotoJS>::SharedPtr arm_goto_js_service_;
+    rclcpp::Service<mars_msgs::srv::GotoJS>::SharedPtr arm_goto_js_v2_service_;
+    rclcpp::Service<mars_msgs::srv::GotoJSTrajectory>::SharedPtr arm_goto_js_traj_service_;
+    sensor_msgs::msg::JointState arm_state_msg_;    // 6-joint message for /mars/arm/state
+    sensor_msgs::msg::JointState joint_state_msg_;  // 7-joint message for /joint_states
+    std::mutex arm_command_mutex_;
+    std::atomic<bool> has_arm_command_{false};
+
+    // Direct pass-through (guarded by arm_command_mutex_)
+    std::array<double, 6> latest_target_{};
+    bool has_target_{false};
+    bool target_pending_{false};  // a trajectory wrote it since the pass-through last ran
+    // Anything that commands the arm takes a new claim; going limp releases it,
+    // and a released arm folds after kRestWhenIdleS.
+    uint64_t arm_claim_{0};
+    std::chrono::steady_clock::time_point released_at_{};  // zero while claimed
+    uint64_t claimArm();
+    void releaseArm();
+    void releaseArmIfClaimed(uint64_t claim);
+    // Also drops the target, so the servos don't lunge back to it when torque returns.
+    void releaseLimpArm();
+    void restartGraceIfReleased();
+    rclcpp::TimerBase::SharedPtr idle_rest_timer_;
+
+    // Joint state tracking for planning
+    std::vector<double> latest_joint_positions_;
+    std::mutex joint_state_mutex_;
+
+    std::vector<std::string> joint_names_{"joint1", "joint2", "joint3", "joint4", "joint5", "joint6"};
+
+    // HEAD members
+    rclcpp::Publisher<std_msgs::msg::String>::SharedPtr head_position_pub_;
+    rclcpp::Subscription<std_msgs::msg::Int32>::SharedPtr head_position_sub_;
+    rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr head_ai_position_service_;
+    rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr head_enable_service_;
+    rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr joint_state_pub_;
+    int latest_head_command_{0};
+    std::mutex head_command_mutex_;
+    std::atomic<bool> has_head_command_{false};
+
+    // Health monitoring
+    rclcpp::Publisher<mars_msgs::msg::ArmStatus>::SharedPtr arm_status_pub_;
+    rclcpp::TimerBase::SharedPtr health_timer_;
+    mars_msgs::msg::ArmStatus last_arm_status_;
+    std::mutex arm_status_mutex_;  // guards last_arm_status_ and orders the scan's and announceTorque's publishes
+    std::atomic<bool> arm_torque_enabled_{true};
+    // An arm servo is limp on a latched error: the fold must not drag the arm around it.
+    std::atomic<bool> servo_tripped_{false};
+
+    // Control timer
+    rclcpp::TimerBase::SharedPtr control_timer_;
+    double control_frequency_;
+    // The loop reads the bus faster than any consumer wants the result:
+    // state topics go out every Nth tick, the command echo and the head
+    // position only when they change.
+    int arm_state_publish_divisor_{1};
+    int joint_state_publish_divisor_{1};
+    unsigned publish_tick_{0};
+    std::vector<int> last_published_command_;
+    int last_published_head_encoder_{-1};
+    std::chrono::steady_clock::time_point last_head_publish_time_{};
+
+    // Callback groups for parallel execution
+    rclcpp::CallbackGroup::SharedPtr timer_callback_group_;
+    rclcpp::CallbackGroup::SharedPtr service_callback_group_;
+    rclcpp::CallbackGroup::SharedPtr health_callback_group_;
+    // torque_off alone: it must land during a fold or goto, not queue behind it.
+    rclcpp::CallbackGroup::SharedPtr stop_callback_group_;
+    // The fold alone: a goto preempts it by claim, so it must never queue behind it.
+    rclcpp::CallbackGroup::SharedPtr rest_callback_group_;
+
+    // Mutex to protect Dynamixel serial bus access
+    std::mutex dynamixel_mutex_;
+
+    // PID hot-reload
+    rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr param_callback_handle_;
+
+    // Gain scheduling
+    std::array<GainProfile, 7> gs_near_;
+    std::array<GainProfile, 7> gs_far_;
+    std::array<GainProfile, 7> gs_teleop_;
+    std::array<GainProfile, 7> gs_last_applied_;
+    int gs_cycle_counter_ = 0;
+    // Written by the trajectory and service threads, read (and decayed) by
+    // the control loop — atomic so those cross-thread accesses are defined.
+    // The decay's check-then-write can still interleave with a trajectory
+    // start; the waypoint loop re-asserts the mode each step to bound that.
+    std::atomic<GainMode> gain_mode_{GainMode::TELEOP};
+    GainMode last_applied_gain_mode_{GainMode::TELEOP};
+    // When the last trajectory finished. Scheduled gains hold the arm firmly
+    // between the closely-spaced moves a skill sends (dropping to the soft
+    // teleop gains in the gaps made the arm sag and snap back), but holding
+    // them while idle cooks the shoulder — joint 2 reached 70 C. So the hold
+    // decays back to teleop gains after kScheduledHoldTimeout of quiet.
+    // Atomic for the same reason as gain_mode_: stamped by the trajectory
+    // threads (HoldGuard), read by the control loop.
+    std::atomic<std::chrono::steady_clock::time_point> last_trajectory_end_{std::chrono::steady_clock::time_point{}};
+    // The idle decay waits for all of them: it once flipped a carry move onto
+    // soft gains mid-flight, and the shaken grip dropped the object.
+    std::atomic<int> trajectories_in_flight_{0};
+
+    // Control loop timing instrumentation
+    std::array<TimingAccumulator, 10> timing_stats_{{TimingAccumulator{"total"}, TimingAccumulator{"lock_wait"},
+                                                     TimingAccumulator{"readState"}, TimingAccumulator{"readEffort"},
+                                                     TimingAccumulator{"pubArm"}, TimingAccumulator{"pubHead+JS"},
+                                                     TimingAccumulator{"gainSched"}, TimingAccumulator{"cmdWrite"},
+                                                     TimingAccumulator{"syncWritePID"}, TimingAccumulator{"misc"}}};
+};
+
+// Template implementation must be in the header
+template <typename Func>
+void MarsArmNode::retryServoOp(int servo_id, const char* op_name, Func&& fn, int max_retries) {
+    for (int attempt = 1; attempt <= max_retries; ++attempt) {
+        try {
+            fn();
+            return;
+        } catch (const std::exception& e) {
+            RCLCPP_WARN(this->get_logger(), "Servo %d %s attempt %d/%d failed: %s", servo_id, op_name, attempt,
+                        max_retries, e.what());
+            if (attempt == max_retries)
+                throw;
+            std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        }
+    }
+}
+
+}  // namespace mars_arm

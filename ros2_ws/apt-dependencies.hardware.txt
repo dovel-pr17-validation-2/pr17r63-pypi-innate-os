@@ -1,0 +1,110 @@
+# Physical-robot-only dependencies for innate-os.
+# Installed only on the robot (post_update.sh installs common + hardware); the
+# simulation image uses common + apt-dependencies.sim.txt instead.
+# Split into NVIDIA/Jetson packages and robot-only ROS/system packages that the
+# sim build does not need (the sim stack uses lighter equivalents or omits them).
+# Install with: xargs -a apt-dependencies.hardware.txt sudo apt-get install -y
+
+# NVIDIA VPI (for stereo depth estimation in mars_cam)
+nvidia-vpi-dev
+
+# NVIDIA GStreamer plugins (for nvvidconv hardware acceleration on Jetson)
+nvidia-l4t-gstreamer
+
+# NVIDIA CUDA toolkit (required for PyTorch on Jetson)
+cuda-toolkit-12-6
+
+# cuDNN is separate from CUDA toolkit
+libcudnn9-cuda-12
+
+# TensorRT (the ACT policy inference path; see manipulation/act_trt.py).
+# nvidia-l4t-dla-compiler provides libnvdla_compiler.so, which libnvinfer dlopens
+# at import time -- without it the tensorrt Python import fails and the policy can't
+# load. post_update.sh runs ldconfig after install so the linker finds it.
+tensorrt
+python3-libnvinfer
+nvidia-l4t-dla-compiler
+
+# -----------------------------------------------------------------------------
+# Robot-only ROS 2 packages (sim builds lighter equivalents or omits these).
+# CI installs `common` alone and resolves any of these it needs to build via
+# `rosdep install --from-paths src` (they are declared in package.xml).
+# -----------------------------------------------------------------------------
+
+# Navigation / SLAM full stack (sim assembles a trimmed nav stack from the
+# nav2 sub-packages in apt-dependencies.sim.txt)
+# Full explicit innate nav2 set. Deliberately NOT the stock metapackage or
+# nav2-bringup: their versioned Depends anchor the stock stack and cannot be
+# satisfied by the innate debs' Provides, yielding a stock/innate hybrid
+# (observed live: stock mppi -> accel limits silently ignored).
+ros-humble-innate-nav-2d-msgs
+ros-humble-innate-nav-2d-utils
+ros-humble-innate-nav2-amcl
+ros-humble-innate-nav2-behavior-tree
+ros-humble-innate-nav2-behaviors
+ros-humble-innate-nav2-bt-navigator
+ros-humble-innate-nav2-collision-monitor
+ros-humble-innate-nav2-common
+ros-humble-innate-nav2-constrained-smoother
+ros-humble-innate-nav2-controller
+ros-humble-innate-nav2-core
+ros-humble-innate-nav2-costmap-2d
+ros-humble-innate-nav2-lifecycle-manager
+ros-humble-innate-nav2-map-server
+ros-humble-innate-nav2-mppi-controller
+ros-humble-innate-nav2-msgs
+ros-humble-innate-nav2-planner
+ros-humble-innate-nav2-simple-commander
+ros-humble-innate-nav2-smac-planner
+ros-humble-innate-nav2-smoother
+ros-humble-innate-nav2-util
+ros-humble-innate-nav2-velocity-smoother
+ros-humble-innate-nav2-voxel-grid
+ros-humble-innate-spatio-temporal-voxel-layer
+ros-humble-slam-toolbox-humble-lifecycle
+
+# Manipulation (sim pulls only ros-humble-moveit-msgs)
+ros-humble-moveit
+ros-humble-moveit-ros-move-group
+
+# Real-sensor perception, lidar, point cloud
+ros-humble-rplidar-ros
+ros-humble-pcl-ros
+ros-humble-vision-msgs
+ros-humble-image-pipeline
+ros-humble-image-transport-plugins
+ros-humble-depth-image-proc
+ros-humble-camera-calibration
+
+# State publishers / lifecycle helpers
+ros-humble-joint-state-publisher
+ros-humble-joint-state-publisher-gui
+ros-humble-bondpy
+
+# Default Fast-RTPS middleware (sim/robot run rmw-zenoh; kept for fallback)
+ros-humble-fastrtps
+
+# -----------------------------------------------------------------------------
+# Robot-only system packages
+# -----------------------------------------------------------------------------
+
+# USB / serial / audio hardware
+libudev-dev
+libusb-1.0-0-dev
+portaudio19-dev
+python3-serial
+python3-pygame
+
+# Disk SMART health (innate_logger reads it hourly via sudo smartctl)
+smartmontools
+
+# On-robot convenience tools
+htop
+btop
+nano
+vim
+
+# Parallel GStreamer 1.24 at /opt/gst: working webrtcbin ULPFEC for teleop
+# video (the system 1.20 negotiates it but never emits it); the camera launch
+# activates it automatically when installed
+innate-gstreamer-opt

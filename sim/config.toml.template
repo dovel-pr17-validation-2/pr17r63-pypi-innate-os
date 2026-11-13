@@ -1,0 +1,32 @@
+# Optional non-secret simulator overrides for `./innate-sim`.
+# Copy to sim/config.toml or let `./innate-sim setup` create it automatically.
+# Leave values commented to use the built-in defaults.
+
+[simulation]
+# Environment pack the world server loads (a directory under sim/environments).
+# `./innate-sim up --environment NAME` overrides it for one launch, and a
+# running simulator switches from Scene setup in the 3D view.
+# environment = "apartment"
+
+[os]
+# Optional prebuilt Innate OS image. By default ("auto") the launcher tries a
+# content-addressed prebuilt image matching this checkout; failing that, the
+# published dependency image (which carries no workspace, so it matches any
+# source tree); failing that, a local Docker build.
+# image = "auto"
+#
+# Other options:
+# image = "local"    # never consult the registry, and use the compose default
+#                    # innate-os-sim-clean-innate:latest -- a MUTABLE tag, so
+#                    # it is not rebuilt when sim/Dockerfile or the apt lists
+#                    # change. Prefer pull_image = false below, which stays
+#                    # content-addressed.
+# image = "ghcr.io/innate-inc/innate-os-sim-ros:main"
+#
+# Whether "auto" may reach the network: false uses whatever is already on this
+# machine and builds anything missing locally.
+# pull_image = true
+
+# Run `colcon build` on every startup. Leave false for incremental startup:
+# the launcher rebuilds only when ros2_ws/src is newer than install/setup.zsh.
+# always_build = false

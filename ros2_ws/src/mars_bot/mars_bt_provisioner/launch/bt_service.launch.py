@@ -1,0 +1,17 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Innate Inc
+from launch import LaunchDescription
+from launch_ros.actions import Node
+
+
+def generate_launch_description():
+    return LaunchDescription(
+        [
+            Node(
+                package="mars_bt_provisioner",
+                executable="simple_bt_service.py",
+                name="bt_service",
+                output="screen",
+            ),
+        ]
+    )

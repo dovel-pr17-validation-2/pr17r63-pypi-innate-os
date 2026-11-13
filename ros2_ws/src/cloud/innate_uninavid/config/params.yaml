@@ -1,0 +1,22 @@
+uninavid_node:
+  ros__parameters:
+    # ── Connection ────────────────────────────────────────────────────────
+    # ws_url and auth_issuer_url default from env vars; override here if needed.
+    # INNATE_SERVICE_KEY belongs only in the owner's .env/environment, never
+    # in ROS parameters or /brain/backend_config. Restart after changing it.
+    # ws_url: "wss://uninavid-v1.svc.innate.bot"
+    # auth_issuer_url: "https://auth-v1.svc.innate.bot"
+
+    # ── Motion ───────────────────────────────────────────────────────────
+    forward_speed: 0.3
+    turn_speed: 0.8
+
+    # ── Timing / control ─────────────────────────────────────────────────
+    cmd_duration_sec: 0.1
+    cmd_publish_hz: 50.0
+    poll_period_sec: 0.02
+    latency_report_sec: 5.0
+
+    # ── Websocket image streaming ────────────────────────────────────────
+    image_send_hz: 49.0
+    consecutive_stops_to_complete: 30

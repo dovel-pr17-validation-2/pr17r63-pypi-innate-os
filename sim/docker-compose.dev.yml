@@ -1,0 +1,180 @@
+# The launcher passes `-p innate-os-<checkout id>`; this name is for running the
+# file by hand.
+name: innate-os
+
+services:
+  # Optional X display for GUI debugging inside the container; the sim runs
+  # headless and never draws to it. Start it with COMPOSE_PROFILES=x11.
+  novnc:
+    image: theasp/novnc:latest
+    profiles: ["x11"]
+    environment:
+      # Adjust to your desired screen resolution:
+      - DISPLAY_WIDTH=1600
+      - DISPLAY_HEIGHT=968
+      - RUN_XTERM=no
+    ports:
+      # novnc's browser view of the container X display (optional; the sim
+      # renders headless). Override the published side when 8080 is taken:
+      # NOVNC_PORT=8081 ./innate-sim up. Outside the INNATE_SIM_PORT_BASE block:
+      # the x11 profile is off by default, so it never collides.
+      - "${NOVNC_PORT:-8080}:8080"
+    networks:
+      - x11
+
+  innate:
+    image: ${INNATE_OS_IMAGE:-innate-os-sim-clean-innate:latest}
+    build:
+      context: ..
+      dockerfile: sim/Dockerfile
+      target: dev-runtime
+      # Build with the host network namespace so `RUN apt-get` can reach DNS.
+      # On hosts using systemd-resolved (nameserver 127.0.0.53) the default
+      # bridge build network can't reach that host-loopback resolver, so apt
+      # fails with "Temporary failure resolving ...". Harmless where bridge
+      # DNS already works.
+      network: host
+    # config.OS_CONTAINER_NAME, matching the -p project above.
+    container_name: ${INNATE_OS_CONTAINER_NAME:-innate-dev}
+    # Use host networking if you need direct access to hardware, or use your own approach
+    environment:
+      # Points at the optional novnc X display (COMPOSE_PROFILES=x11);
+      # harmless when that profile is off -- the sim renders headless.
+      - DISPLAY=novnc:0.0
+      - VIRTUAL_MARS_ASSETS=/root/innate-os/sim/assets
+      - INNATE_OS_ROOT=/root/innate-os
+      - SKIP_UPDATE_CHECK=1 # Skip git update checks in simulation mode
+      - CCACHE_DIR=/root/.cache/ccache
+      # Zenoh SHM needs realtime thread priorities Docker won't grant; without
+      # them it stalls service/action traffic under load (see setup_dds.zsh).
+      - INNATE_ZENOH_DISABLE_SHM=1
+      # Keys land in the checkout's .env, not the generated copy the nodes read.
+      - INNATE_KEYS_ENV_FILE=/root/innate-os/.env.source
+      # Set by the launcher when the host world server runs (native GL
+      # rendering outside Docker, see mars_sim_driver/world_server.py);
+      # required -- the sim world always runs outside the container.
+      - VIRTUAL_MARS_REMOTE=${VIRTUAL_MARS_REMOTE:-}
+      # The Foxglove bridge's published host port, so in-container tooling
+      # (innate foxglove status) can print the address that actually works
+      # from the host. Must match the ports entry below.
+      - SIM_FOXGLOVE_PORT=${SIM_FOXGLOVE_PORT:-8765}
+      # A HOST port: the world server runs outside the container, and the
+      # webapp proxy relays /worldstate to it.
+      - INNATE_WORLD_STATE_PORT=${SIM_WORLD_STATE_PORT:-8800}
+      - INNATE_LEROBOT_VENV=/root/.cache/innate-lerobot/venv
+      # 1 renders the raw camera topics at the robot's capture rates (15/30 fps) while something
+      # subscribes to them; see lerobot/README.md. Needs native GL on the host to keep up.
+      - INNATE_SIM_HARDWARE_CAMERA_RATES=${INNATE_SIM_HARDWARE_CAMERA_RATES:-}
+    ports:
+      # The launcher fills every published side in from INNATE_SIM_PORT_BASE
+      # (sim/README.md "Running two checkouts at once").
+      #
+      # rosbridge (rws). Loopback by default: publishing on 0.0.0.0 invites
+      # internet probes that open, send nothing, and disconnect, spamming the
+      # rws log. Set SIM_ROSBRIDGE_BIND=0.0.0.0 to let LAN devices (e.g. a
+      # phone/laptop opening the sim viewer) reach it.
+      - "${SIM_ROSBRIDGE_PORT:-9090}:9090"
+      # UDP leader receiver.
+      - "${SIM_UDP_PORT:-9999}:9999/udp"
+      # webapp front door (replaces the deprecated sim/frontend UI): the in-container
+      # python server binds 443 (https) + 80 (http), both serving the full app.
+      # Override the published side (e.g. SIM_HTTPS_PORT=8443 ./innate-sim up) to
+      # publish on a non-privileged port; the container always binds 443/80.
+      - "${SIM_HTTPS_PORT:-443}:443"
+      - "${SIM_HTTP_PORT:-80}:80"
+      # Foxglove bridge websocket (auto-started by launch_sim_in_tmux.zsh).
+      # Loopback by default, like rosbridge; SIM_FOXGLOVE_BIND=0.0.0.0 opens it
+      # to the LAN.
+      - "${SIM_FOXGLOVE_BIND:-127.0.0.1}:${SIM_FOXGLOVE_PORT:-8765}:8765"
+      # LeRobot bridge (manipulation_server): a lerobot process on this machine drives the
+      # sim with --robot.remote_ip=localhost. Loopback only, like rosbridge.
+      - "127.0.0.1:${SIM_LEROBOT_ACTIONS_PORT:-5555}:5555"
+      - "127.0.0.1:${SIM_LEROBOT_OBSERVATIONS_PORT:-5556}:5556"
+
+    volumes:
+      # 1) Mount your local code (paths are relative to this file's directory)
+      - ../ros2_ws:/root/innate-os/ros2_ws:rw
+      - ../scripts:/root/innate-os/scripts:rw
+      # rw: the webapp Settings page saves config/settings.yaml (gitignored).
+      - ../config:/root/innate-os/config:rw
+      # rw: robot_info.json (the robot's name) — a rename in sim survives a rebuild.
+      - ../data:/root/innate-os/data:rw
+      - ../workspace:/root/innate-os/workspace:rw
+      - ../webapp:/root/innate-os/webapp:ro
+      # The LeRobot plugin: the webapp's "Publish to Hugging Face" runs its converter. Read-only;
+      # its Linux environment lives in a named volume, away from the host's macOS lerobot/.venv.
+      - ../lerobot:/root/innate-os/lerobot:ro
+      - lerobot_env:/root/.cache/innate-lerobot
+      # Apartment assets for the sim driver (generated by sim/tools; the
+      # driver package reads VIRTUAL_MARS_ASSETS).
+      - ../sim/assets:/root/innate-os/sim/assets:ro
+      # The viewer's public assets (/models, /physics) and the SimSession
+      # bundle (/sim-viewer/). Both are installed onto the host by the
+      # launcher -- from the asset image's `viewer` layer and from the bundle
+      # image respectively -- and bind-mounted from there.
+      #
+      # They used to be `type: image` mounts, which reads better and broke
+      # twice in a year: moby#51687 made every such mount fail with 'file name
+      # too long', and Compose 5 resolves the source to a manifest digest the
+      # daemon cannot look up. Both landed on users who never chose the
+      # feature. Staleness is handled where it belongs instead: the launcher
+      # keys each directory to the layer digest it came from
+      # (runtime.install_layer_subtree).
+      - ../sim/viewer/public:/root/innate-os/sim/viewer/public:ro
+      - ../sim/viewer/dist-lib:/root/innate-os/sim/viewer/dist-lib:ro
+      # The nodes' env: the launcher generates this from the checkout's .env on every `up`.
+      - ${INNATE_OS_ENV_FILE:-../.env}:/root/innate-os/.env:ro
+      # rw, and where the Settings page's Keys section writes: the checkout's own .env, which
+      # the generated file above is rebuilt from — a key written to that copy would be gone at
+      # the next `up`. A rename cannot replace a bind-mounted file, so keys_store writes
+      # through it (see _write there); keys apply on the next `./innate-sim up`.
+      - ../.env:/root/innate-os/.env.source:rw
+
+      # 2) Keep build/install/log folders as Docker named volumes, so they won't pollute your host
+      - ros2_ws_build:/root/innate-os/ros2_ws/build
+      - ros2_ws_install:/root/innate-os/ros2_ws/install
+      - ros2_ws_log:/root/innate-os/ros2_ws/log
+      - ccache:/root/.cache/ccache
+
+      # Persist ROS runtime node logs (~/.ros/log) to the host so per-node
+      # stdout/stderr survives `docker compose down` on a failed startup.
+      - ./launcher/.state/ros-log:/root/.ros/log
+
+      # Persist the webapp's self-signed TLS cert across `down`/`up` so the
+      # browser only has to accept the HTTPS warning once (otherwise the cert
+      # lives in the container's ephemeral layer and is regenerated each up).
+      - ./launcher/.state/webapp-tls:/root/.innate-webapp-tls
+
+      # 3) Mount git credentials from host (read-only for security)
+      - ~/.ssh:/root/.ssh:ro
+      - ~/.gitconfig:/root/.gitconfig:ro
+
+    # 2) Or just do a "do-nothing" command so the container doesn't exit
+    command: zsh -l
+
+    # 3) Keep container open for interactive usage
+    tty: true
+    stdin_open: true
+    shm_size: "2g"
+    # rmw_zenoh mlock()s its POSIX SHM pool. The container's default 64 KiB
+    # memlock ceiling makes the receive-side mmap fail with ENOMEM ("OS error
+    # 12"), silently dropping SHM back to TCP. Lift the lock limit so the SHM
+    # transport actually works. (shm_size only sizes /dev/shm, not the lock.)
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    networks:
+      - x11
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+volumes:
+  lerobot_env:
+  ros2_ws_build:
+  ros2_ws_install:
+  ros2_ws_log:
+  ccache:
+
+networks:
+  x11:

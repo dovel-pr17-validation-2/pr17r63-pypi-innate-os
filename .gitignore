@@ -1,0 +1,149 @@
+# Colcon build and install directories
+build/
+install/
+log/
+
+# Generated CLI artifacts
+scripts/build/
+ros2_ws/src/brain/manipulation/ckpts/*
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+sock_experiments/
+
+# IDE specific files
+.idea/
+*.swp
+*.swo
+*~
+
+# ROS 2 specific
+.ros/
+.catkin_workspace
+
+# System specific
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+*.o
+*.a
+*.so
+*.dll
+*.dylib
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+
+# Environment files
+.env
+config/os.toml
+config/settings.yaml
+sim/config.toml
+.venv/
+ENV/
+deploy-keys/
+sim/launcher/.state/
+
+# Ignore stale local hook dirs from older setup flows or local tooling.
+.githooks/
+
+# PyTorch model weights and checkpoints
+*.pt
+*.pth
+*.ckpt
+*.pkl
+*.bin
+*.h5
+weights/
+checkpoints/
+runs/
+ros2_ws/src/brain/manipulation/ckpts/*
+
+# training data
+data/
+!sim/data/
+!sim/data/.gitignore
+
+# User-created scripts live under workspace/custom_*/ and stay local to the machine.
+# Directories are recreated at runtime by ensure_user_directories().
+workspace/custom_agents/
+workspace/custom_skills/
+# Regenerated from the skills on this robot on every change; per-machine, not source.
+workspace/physical_skills/
+
+# Runtime start_training resume markers (innate_training_node).
+workspace/.training_pending/
+
+# Per-machine challenge state, written at runtime.
+workspace/challenges.json
+workspace/challenge_context.json
+
+# Per-skill persistent key-value stores (Skill.storage, skills/types.py).
+workspace/skill_storage/
+
+# Generated on-robot by the skill catalog (typed physical-skill refs).
+workspace/physical_skills/
+
+# recordings folder
+recordings/
+
+#other werid files
+*.mp4
+
+logs
+
+data/.last_map
+data/.last_mode
+.onnx
+
+# arm_wave directory (local data, not tracked)
+arm_wave/
+
+.vscode
+workspace/innate_skills/**/*.engine
+
+node_modules/
+dist-lib/
+*.tsbuildinfo
+
+# sim: uv venv + generated apartment assets (hulls, textured rooms -- sim/tools outputs)
+sim/.venv/
+sim/assets
+sim/sandbox/__pycache__/
+MUJOCO_LOG.TXT
+# sim: fetched asset bundle (see ci/build_assets_image.sh); the launcher
+# extracts these on `up`
+sim/viewer/public/
+sim/viewer/assets/
+# licensed environment packs that must never be published from this repo
+sim/environments.local/
+sim/.sim-assets.tmp*
+
+# boot sounds: WAV assets fetched by post_update.sh from GCS (too heavy for git)
+config/sounds/*.wav
+config/sounds/motor_voices/*.wav
+
+# LeRobot plugin (own uv environment)
+lerobot/.venv/
+lerobot/outputs/

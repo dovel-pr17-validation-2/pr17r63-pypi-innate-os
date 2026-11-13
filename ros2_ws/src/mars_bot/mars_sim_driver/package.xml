@@ -1,0 +1,31 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>mars_sim_driver</name>
+  <version>0.1.0</version>
+  <description>
+    Virtual MARS: headless MuJoCo simulation impersonating the hardware
+    drivers at the ROS topic level (odom/TF, lidar, cameras, depth, arm/head),
+    so the full innate-os stack runs against it unchanged.
+  </description>
+  <maintainer email="david@innate.bot">Innate</maintainer>
+  <license>Apache-2.0</license>
+
+  <depend>rclpy</depend>
+  <depend>std_msgs</depend>
+  <depend>std_srvs</depend>
+  <depend>sensor_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>nav_msgs</depend>
+  <depend>tf2_ros</depend>
+  <depend>mars_msgs</depend>
+  <exec_depend>robot_state_publisher</exec_depend>
+  <exec_depend>mars_description</exec_depend>
+  <!-- pillow comes from pip in the sim image, not rosdep. MuJoCo is NOT in
+       the image: the world always runs on the host (world_server.py via uv);
+       node.py is a pure RPC client of it. -->
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>

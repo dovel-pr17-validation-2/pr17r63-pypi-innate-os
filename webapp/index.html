@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, interactive-widget=resizes-content" />
+    <meta name="color-scheme" content="dark" />
+    <title>Innate</title>
+    <!-- Absolute asset paths: this one shell is served for every app route
+         (/, /agent, /profiling, …), so relative paths would resolve wrong. -->
+    <link rel="icon" type="image/avif" href="/public/innate-logo.avif" />
+    <link rel="stylesheet" href="/css/app.css" />
+    <link rel="stylesheet" href="/css/calibration.css" />
+    <link rel="stylesheet" href="/css/brain.css" />
+    <!-- Every module the first paint of the default route needs, named here so the browser
+         fetches them all at once. Without it the app's import graph is discovered one level
+         at a time — five serial round trips before the page module is even requested, which
+         is most of a cold load over the robot's WiFi. Nothing breaks if an entry goes stale
+         (a missing one is just not preloaded, a dead one is a wasted request);
+         `node tests/preload.test.js` recomputes the graph and reports the drift. -->
+    <link rel="modulepreload" href="/js/rosClient.js" />
+    <link rel="modulepreload" href="/js/bootSplash.js" />
+    <link rel="modulepreload" href="/js/shell.js" />
+    <link rel="modulepreload" href="/js/config.js" />
+    <link rel="modulepreload" href="/js/railLayout.js" />
+    <link rel="modulepreload" href="/js/constants.js" />
+    <link rel="modulepreload" href="/js/teleop/agentState.js" />
+    <link rel="modulepreload" href="/js/agentIndicator.js" />
+    <link rel="modulepreload" href="/js/armAlert.js" />
+    <link rel="modulepreload" href="/js/armReboot.js" />
+    <link rel="modulepreload" href="/js/pressActivate.js" />
+    <link rel="modulepreload" href="/js/ttsAudio.js" />
+    <link rel="modulepreload" href="/js/motorSoundAudio.js" />
+    <link rel="modulepreload" href="/js/micAudioState.js" />
+    <link rel="modulepreload" href="/js/agent/main.js" />
+    <link rel="modulepreload" href="/js/agent/agentStudio.js" />
+    <link rel="modulepreload" href="/js/agent/agentPanel.js" />
+    <link rel="modulepreload" href="/js/agent/agentSheet.js" />
+    <link rel="modulepreload" href="/js/agent/chatStream.js" />
+    <link rel="modulepreload" href="/js/agent/offerDeck.js" />
+    <link rel="modulepreload" href="/js/agent/storyCards.js" />
+    <link rel="modulepreload" href="/js/agent/cue.js" />
+    <link rel="modulepreload" href="/js/agent/directiveControls.js" />
+    <link rel="modulepreload" href="/js/agent/skillFormat.js" />
+    <link rel="modulepreload" href="/js/agent/challengePanel.js" />
+    <link rel="modulepreload" href="/js/agent/challengeIntro.js" />
+    <link rel="modulepreload" href="/js/agent/micStream.js" />
+    <link rel="modulepreload" href="/js/keyboardInset.js" />
+    <link rel="modulepreload" href="/js/teleop/targetingOverlay.js" />
+    <link rel="modulepreload" href="/js/agent/agentMicControl.js" />
+    <link rel="modulepreload" href="/js/pageMount.js" />
+    <link rel="modulepreload" href="/js/robotSession.js" />
+    <link rel="modulepreload" href="/js/sharedVideoSession.js" />
+    <link rel="modulepreload" href="/js/webrtcSession.js" />
+    <link rel="modulepreload" href="/js/webrtcConfig.js" />
+    <link rel="modulepreload" href="/js/clipboard.js" />
+    <link rel="modulepreload" href="/js/teleop/videoStage.js" />
+    <link rel="modulepreload" href="/js/teleop/trajectoryOverlay.js" />
+    <link rel="modulepreload" href="/js/teleop/cameraSwitch.js" />
+    <link rel="modulepreload" href="/js/teleop/telemetry.js" />
+    <link rel="modulepreload" href="/js/teleop/connectPanel.js" />
+  </head>
+  <body>
+    <main id="stage" class="stage"></main>
+    <!-- Boot splash: painted on first paint (app.css is render-blocking), long
+         before router.js and its module graph finish downloading and build the
+         page. Without it the whole shell is black on a cold/slow load. router.js
+         removes it once the first page has mounted. -->
+    <div id="boot-splash" class="boot-splash">
+      <div class="boot-splash__mark">loading</div>
+      <div class="boot-splash__bar"><span></span></div>
+    </div>
+    <script type="module" src="/js/router.js"></script>
+  </body>
+</html>

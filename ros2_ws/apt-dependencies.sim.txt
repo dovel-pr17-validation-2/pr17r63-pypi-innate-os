@@ -1,0 +1,56 @@
+# Simulation-only dependencies for the innate-os ROS2 workspace.
+# Installed on top of apt-dependencies.common.txt for the published simulation
+# image (see sim/Dockerfile). The robot does not use
+# this file; it gets these packages transitively from the meta-packages in
+# apt-dependencies.hardware.txt (navigation2, moveit, ...).
+# Install with: xargs -a apt-dependencies.sim.txt sudo apt-get install -y
+
+# Build tools used by the local sim launcher
+openssh-client
+pkg-config
+
+# C++ libraries used by workspace packages (named explicitly because the sim
+# build omits the meta-packages that would otherwise pull them in)
+libeigen3-dev
+libfcl-dev
+libopencv-dev
+libopenmpi-dev
+libyaml-cpp-dev
+
+# ROS 2 build/runtime basics
+ros-humble-rclcpp-lifecycle
+ros-humble-message-filters
+
+# ROS 2 messages used by the sim stack
+ros-humble-moveit-msgs
+ros-humble-shape-msgs
+ros-humble-stereo-msgs
+ros-humble-tf2-msgs
+ros-humble-trajectory-msgs
+ros-humble-visualization-msgs
+
+# Trimmed navigation stack (sim assembles nav from sub-packages instead of the
+# ros-humble-navigation2 meta-package used on the robot)
+ros-humble-behaviortree-cpp-v3
+ros-humble-dwb-core
+ros-humble-dwb-critics
+ros-humble-dwb-plugins
+ros-humble-innate-nav2-behavior-tree
+ros-humble-innate-nav2-core
+ros-humble-innate-nav2-costmap-2d
+ros-humble-nav2-dwb-controller
+ros-humble-innate-nav2-msgs
+ros-humble-nav2-navfn-planner
+ros-humble-innate-nav2-planner
+ros-humble-innate-nav2-util
+ros-humble-innate-nav2-voxel-grid
+# Real navigation stack (mode_manager.launch) now runs in sim too.
+ros-humble-innate-nav2-amcl
+ros-humble-innate-nav2-map-server
+ros-humble-innate-nav2-velocity-smoother
+ros-humble-innate-nav2-mppi-controller
+ros-humble-innate-nav2-smac-planner
+# Innate's lifecycle build of slam_toolbox: mode_manager must be able to
+# deactivate SLAM in navigation mode or it clobbers /map.
+ros-humble-slam-toolbox-humble-lifecycle
+ros-humble-innate-spatio-temporal-voxel-layer

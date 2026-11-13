@@ -1,0 +1,81 @@
+name: Integration Tests
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+# Required for Workload Identity Federation (OIDC) auth to Google Cloud.
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: integration-test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  integration-test:
+    # A fork PR gets neither the repo vars nor an OIDC token, so the auth step
+    # would fail on every outside contribution. github.repository is the *base*
+    # repo on pull_request, so it cannot tell a fork PR apart on its own — the
+    # head repo can.
+    if: >-
+      github.repository == 'innate-inc/innate-os' &&
+      (github.event_name != 'pull_request' ||
+       github.event.pull_request.head.repo.full_name == github.repository)
+
+    # Runs on a GitHub-hosted runner, but the heavy build+test executes on
+    # Google Cloud Build (ci/cloudbuild.integration-test.yaml). This runner only
+    # authenticates and submits the build — no Docker work happens here, so it no
+    # longer needs a self-hosted machine.
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v3
+        with:
+          # `gcloud beta builds submit` (used below for log streaming) needs the
+          # beta component.
+          install_components: beta
+
+      - name: Submit integration tests to Cloud Build
+        run: |
+          # rmw_zenoh allocates POSIX shared memory at startup, which Cloud Build's
+          # DEFAULT (gVisor-sandboxed) pool blocks. Submit to a private worker pool
+          # (a real Compute Engine VM) where POSIX shm works. Set the
+          # GCP_CLOUD_BUILD_WORKER_POOL repo var to the pool's full resource name;
+          # GCP_REGION must match the pool's region (e.g. us-central1).
+          pool_flag=""
+          if [ -n "${{ vars.GCP_CLOUD_BUILD_WORKER_POOL }}" ]; then
+            pool_flag="--worker-pool=${{ vars.GCP_CLOUD_BUILD_WORKER_POOL }}"
+          fi
+          # Publish (and push) the warm base image only on main; PRs reuse it.
+          # See ci/cloudbuild.integration-test.yaml for the two-image strategy.
+          publish_base="false"
+          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            publish_base="true"
+          fi
+          # `beta`: the build logs go only to Cloud Logging (see the cloudbuild
+          # config's `logging: CLOUD_LOGGING_ONLY`), and only the beta command
+          # can stream logs from Cloud Logging into this step's output — the GA
+          # command only streams from a GCS logs bucket, so it would sit silent.
+          gcloud beta builds submit \
+            --project="${{ vars.GCP_PROJECT_ID }}" \
+            --region="${{ vars.GCP_REGION }}" \
+            --gcs-source-staging-dir="${{ vars.GCP_CLOUD_BUILD_SOURCE_STAGING_DIR }}" \
+            --service-account="projects/${{ vars.GCP_PROJECT_ID }}/serviceAccounts/${{ vars.GCP_CLOUD_BUILD_SERVICE_ACCOUNT }}" \
+            ${pool_flag} \
+            --substitutions=_PUBLISH_BASE="${publish_base}" \
+            --config=ci/cloudbuild.integration-test.yaml

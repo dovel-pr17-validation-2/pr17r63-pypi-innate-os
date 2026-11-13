@@ -1,0 +1,32 @@
+# File: brain/manipulation/config/manipulation_server.yaml
+# Runtime knobs for the learned-policy manipulation server (behavior.launch.py).
+# Data-collection config lives in recorder.yaml; this file is inference-only.
+# Override any of these per-robot via config/settings.yaml's manipulation_server: section.
+manipulation_server:
+  ros__parameters:
+    data_directory: "~/innate-os/workspace/custom_skills"  # Fallback default; behavior.launch.py overrides this with $INNATE_OS_ROOT/workspace/custom_skills.
+    # Learned-policy inference
+    inference_hz: 25.0                      # policy inference loop rate (Hz)
+    speed: 1.5                             # action execution speed multiplier
+    replay_base_speed_scale: 1.0            # scale on replayed base cmd_vel; 1.0 = full recorded speed
+    learned_base_speed_scale: 1.0           # scale on learned-policy predicted base cmd_vel; 1.0 = full predicted speed
+    n_action_steps: 0                      # replan horizon; 0 = auto (min(40, chunk_size)), per-skill config wins
+    # ACT temporal-ensemble smoothing. Runs the TRT engine every step and exponentially blends
+    # overlapping chunk predictions to remove the per-replan motion discontinuity.
+    #   > 0 : weight OLDER predictions more (smoother; can over-commit to stale far-horizon steps)
+    #   < 0 : weight the LATEST chunk more (reactive/closed-loop; noisier)
+    #   = 0 : disabled -- fall back to the chunked-queue path (replan every n_action_steps)
+    # Disabled by default; 0.01 is a good starting value to enable smoothing (pins n_action_steps=1).
+    temporal_ensemble_coeff: 0.0
+    # LeRobot bridge: a lerobot process (another computer, or a uv env on this Jetson) observes and drives the
+    # robot over ZMQ; the protocol and its limits are in manipulation/lerobot_bridge.py, the user guide
+    # in lerobot/README.md.
+    lerobot_bridge:
+      enabled: true
+      port_actions: 5555        # PULL: clients push JSON actions / heartbeats
+      port_observations: 5556   # PUB: 'state' (JSON) and 'obs' (JSON + one JPEG per camera)
+      rate_hz: 30.0
+      jpeg_quality: 90
+      # No login, like the rosbridge websocket: anyone on the robot's network can connect.
+      # "127.0.0.1" keeps the bridge to lerobot processes on this Jetson; enabled: false closes it.
+      bind_address: "*"

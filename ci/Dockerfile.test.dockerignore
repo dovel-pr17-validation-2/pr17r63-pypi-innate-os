@@ -1,0 +1,28 @@
+# CI test image bakes in ros2_ws source, config, and workspace at build
+# time (no bind mounts in CI). Allow what Dockerfile.test COPYs from.
+**
+
+!ros2_ws/
+!ros2_ws/**
+
+# ...but never local colcon outputs. Dockerfile.test only COPYs ros2_ws/src so
+# there's no CMakeCache collision, but re-including these would still upload a
+# local dev build (often multi-GB) into the build context for nothing.
+ros2_ws/build/
+ros2_ws/install/
+ros2_ws/log/
+
+!config/
+!config/**
+!workspace/
+!workspace/**
+!ci/
+!ci/run_integration_tests.sh
+
+# The webapp front-door proxy (Python) runs its no-ROS pytest bucket in
+# run_integration_tests.sh. Re-include webapp/ whole (1.3M, no node_modules):
+# a nested !webapp/proxy/** works on newer BuildKit but Cloud Build's prunes the
+# excluded parent dir, so mirror the top-level !ros2_ws/** pattern that works.
+!webapp/
+!webapp/**
+webapp/**/__pycache__/
